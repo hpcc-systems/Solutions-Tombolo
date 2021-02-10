@@ -2,20 +2,22 @@ import React, { Component } from "react";
 import * as d3 from "d3";
 import '../../graph-creator/graph-creator.css';
 import $ from 'jquery';
-import { Button, Icon, Drawer, Row, Col, Descriptions, Badge, Modal, message} from 'antd/lib';
+import { Button, Icon, Drawer, Row, Col, Descriptions, Badge, Modal, message, Spin, Tooltip, Menu, Checkbox, Dropdown} from 'antd/lib';
 import { Typography } from 'antd';
+import { withRouter } from 'react-router-dom';
 import FileDetailsForm from "../FileDetails";
 import JobDetailsForm from "../JobDetails";
 import AssetDetailsDialog from "../AssetDetailsDialog"
 import IndexDetailsForm from "../IndexDetails";
 import ExistingAssetListDialog from "./ExistingAssetListDialog";
-import {handleFileDelete, handleFileInstanceDelete, handleJobDelete, handleIndexDelete, handleQueryDelete, handleSubProcessDelete, updateGraph} from "../../common/WorkflowUtil";
+import {handleFileDelete, handleFileInstanceDelete, handleJobDelete, handleIndexDelete, handleQueryDelete, handleSubProcessDelete, updateGraph, changeVisibility} from "../../common/WorkflowUtil";
 import { authHeader, handleError } from "../../common/AuthHeader.js"
 import { hasEditPermission } from "../../common/AuthUtil.js";
 import { shapesData, appendDefs } from "./Utils.js"
 import SubProcessDialog from "./SubProcessDialog";
 import { connect } from 'react-redux';
 import { assetsActions } from '../../../redux/actions/Assets';
+import { DownOutlined, EyeOutlined, ReloadOutlined, EyeInvisibleOutlined  } from '@ant-design/icons';
 const { Text } = Typography;
 
 class Graph extends Component {
@@ -53,7 +55,9 @@ class Graph extends Component {
     selectedSubProcess: {"id":''},
     currentlyEditingNode: {},
     showAssetListDlg: false,
-    assetDetailsFormRef: null
+    assetDetailsFormRef: null,
+    loading: false,
+    nodes: []
   }
 
   consts = {
@@ -118,14 +122,15 @@ class Graph extends Component {
   openDetailsDialog(d) {
     let _self=this;
     let isNew = false;
-    console.log(JSON.stringify(this.state.currentlyEditingNode));
     switch(d.type) {
       case 'File':
         if(d.fileId == undefined || d.fileId == '') {
-          isNew = true;
-          this.setState({
-            showAssetListDlg: true
-          })
+          _self.props.dispatch(assetsActions.newAsset(
+            _self.props.applicationId,
+            ''
+          ));
+          _self.props.history.push('/' + _self.props.applicationId + '/file');
+
         } else {
           this.setState({
             isNew: isNew,
@@ -152,7 +157,8 @@ class Graph extends Component {
         if(d.jobId == undefined || d.jobId == '') {
           isNew = true;
           this.setState({
-            showAssetListDlg: true
+            showAssetListDlg: true,
+            mousePosition: [d.x, d.y]
           })
         } else {
           this.setState({
@@ -167,7 +173,8 @@ class Graph extends Component {
             d.jobId,
             this.props.applicationId,
             ''
-          ));        }
+          ));
+        }
         break;
       case 'Index':
         let isNewIndex = false;
@@ -430,8 +437,39 @@ class Graph extends Component {
     }
   }
 
+  createJobFileRelationship(jobId, dataflowId) {
+    this.setState({
+      loading: true
+    });
+    fetch('/api/job/createFileRelation', {
+      method: 'post',
+      headers: authHeader(),
+      body: JSON.stringify({
+        jobId: jobId,
+        currentlyEditingId: this.state.currentlyEditingId,
+        mousePosition: this.state.mousePosition.join(','),
+        application_id: this.props.applicationId,
+        dataflowId: dataflowId
+      })
+    }).then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      handleError(response);
+    }).then(data => {
+      console.log(`Saved file relationship...`);
+      this.fetchSavedGraph();
+      this.setState({
+        loading: false
+      });
+
+    });
+
+  }
+
   saveAssetToDataflow(assetId, dataflowId) {
     console.log(`save asset -- assetId: ${assetId}, dataflowId: ${dataflowId}`);
+
     fetch('/api/dataflow/saveAsset', {
       method: 'post',
       headers: authHeader(),
@@ -443,21 +481,28 @@ class Graph extends Component {
       handleError(response);
     }).then(data => {
       console.log(`Saved asset ${assetId} to dataflow ${dataflowId}...`);
+      this.createJobFileRelationship(assetId, dataflowId);
     });
   }
 
   saveGraph() {
     console.log('save: '+JSON.stringify(this.props.selectedDataflow))
-    let _self = this, edges = [];
+    let _self = this, edges = [], nodes = this.thisGraph.nodes;
     this.thisGraph.edges.forEach(function (val, i) {
       if(val.source && val.target) {
         edges.push({source: val.source.id, target: val.target.id});
       }
     });
+
     fetch('/api/dataflowgraph/save', {
         method: 'post',
         headers: authHeader(),
-        body: JSON.stringify({"application_id": this.props.applicationId, dataflowId: this.props.selectedDataflow.id, nodes: this.thisGraph.nodes, edges: edges})
+        body: JSON.stringify({
+          "application_id": this.props.applicationId,
+          dataflowId: this.props.selectedDataflow.id,
+          nodes: this.thisGraph.nodes,
+          edges: edges
+        })
     }).then(function(response) {
         if(response.ok) {
           return response.json();
@@ -503,6 +548,10 @@ class Graph extends Component {
         }
         _self.thisGraph.nodes = nodes;
         _self.thisGraph.edges = edges;
+        _self.setState({
+          nodes: nodes
+        });
+
         _self.setIdCt(nodes.length);
         _self.updateGraph();
 
@@ -556,42 +605,55 @@ class Graph extends Component {
     let _self=this;
     let words = title.split(/\s+/g),
         nwords = words.length;
-      d3.select("#txt-"+d.id).remove();
-      //if(d3.select("#label-"+d.id).empty()) {
-      let el = gEl.append("text")
-          .attr("id", "txt-"+d.id)
-      let tspans = Math.floor(title.length / 20);
-      for (let i = 0; i <= tspans; i++) {
-        let dy=(i > 0 ? '15' : '60')
-        let titleToDisplay = title.substring((i * 20), ((i+1) * 20));
-        titleToDisplay = ((title.length - titleToDisplay.length) <=5) ? title : titleToDisplay;
-        let tspan = el.append('tspan')
-          .text(titleToDisplay)
-          .attr("id", "label-"+d.id)
-          .attr("text-anchor", "middle")
-          .attr('x', '20')
-          .attr('dy', dy);
+    d3.select("#txt-"+d.id).remove();
+    //if(d3.select("#label-"+d.id).empty()) {
+    let el = gEl.append("text")
+        .attr("id", "txt-"+d.id)
+    let tspans = Math.floor(title.length / 20);
+    for (let i = 0; i <= tspans; i++) {
+      let dy=(i > 0 ? '15' : '60')
+      let titleToDisplay = title.substring((i * 20), ((i+1) * 20));
+      titleToDisplay = ((title.length - titleToDisplay.length) <=5) ? title : titleToDisplay;
+      let tspan = el.append('tspan')
+        .text(titleToDisplay)
+        .attr("id", "label-"+d.id)
+        .attr("text-anchor", "middle")
+        .attr('x', '20')
+        .attr('dy', dy);
 
-          if(titleToDisplay.length == title.length) {
-            break;
-          }
+      if(titleToDisplay.length == title.length) {
+        break;
       }
+    }
 
-      if(d3.select("#t"+d.id).empty()) {
-        if(hasEditPermission(_self.props.user)) {
-          let deleteIcon = gEl.append('text')
-            .attr('font-family', 'FontAwesome')
-            .attr('id', 't'+d.id)
-            .attr('dy', 8)
-            .attr('dx', 25)
-            .attr('class','delete-icon hide-delete-icon')
-            .on("click", function(d) {
-              d3.event.stopPropagation();
-              _self.deleteNode(d, gEl);
-            })
-            .text(function(node) { return '\uf1f8' })
-          }
-        }
+    if(d3.select("#t"+d.id).empty()) {
+      if(hasEditPermission(_self.props.user)) {
+        let hideIcon = gEl.append('text')
+          .attr('font-family', 'FontAwesome')
+          .attr('id', 'hide'+d.id)
+          .attr('dy', 8)
+          .attr('dx', 10)
+          .attr('class','graph-icon hide-graph-icon')
+          .on("click", function(d) {
+            d3.event.stopPropagation();
+            _self.hideNode(d, gEl);
+          })
+          .text(function(node) { return '\uf070' })
+
+        let deleteIcon = gEl.append('text')
+          .attr('font-family', 'FontAwesome')
+          .attr('id', 't'+d.id)
+          .attr('dy', 8)
+          .attr('dx', 25)
+          .attr('class','graph-icon hide-graph-icon')
+          .on("click", function(d) {
+            d3.event.stopPropagation();
+            _self.deleteNode(d, gEl);
+          })
+          .text(function(node) { return '\uf1f8' })
+      }
+    }
+
   }
 
   insertBgImage = (gEl, x, y, d) => {
@@ -631,8 +693,8 @@ class Graph extends Component {
         .attr('font-family', 'FontAwesome')
         .attr('class', 'icon')
         .attr('font-size', function(d) { return '2em'} )
-        .attr('y', 25)
-        .attr('x', 6)
+        .attr('y', 28)
+        .attr('x', 8)
         //.attr('class','delete-icon hide-delete-icon')
         .text(function(node) { return shape.icon })
     }
@@ -919,7 +981,6 @@ class Graph extends Component {
         return "translate(" + d.x + "," + d.y + ")";
     });
 
-
     // add new nodes
     let newGs = _self.thisGraph.circles.enter()
         .append("g").merge(_self.thisGraph.circles);
@@ -961,87 +1022,107 @@ class Graph extends Component {
         let childNodes = 0;
         newGs.each(function(d) {
           //if (this.childNodes.length === 0) {
-          switch(d.type) {
-            case 'Job':
-            case 'Modeling':
-            case 'Scoring':
-            case 'ETL':
-            case 'Query Build':
-            case 'Data Profile':
-              if(d3.select("#rec-"+d.id).empty()) {
-                d3.select(this)
-                  .append("rect")
-                  .attr("id", "rec-"+d.id)
-                  .attr("rx", shapesData[5].rx)
-                  .attr("ry", shapesData[5].ry)
-                  .attr("width", shapesData[5].rectwidth)
-                  .attr("height", shapesData[5].rectheight)
-                  .attr("stroke", "grey")
-                  .attr("fill", shapesData[5].color)
-                  .attr("stroke-width", "3")
-                  .attr("filter", "url(#glow)")
-                  //.call(_self.nodeDragHandler)
+            switch(d.type) {
+              case 'Job':
+              case 'Modeling':
+              case 'Scoring':
+              case 'ETL':
+              case 'Query Build':
+              case 'Data Profile':
+                if(d3.select("#rec-"+d.id).empty()) {
+                  d3.select(this)
+                    .append("rect")
+                    .attr("id", "rec-"+d.id)
+                    .attr("rx", shapesData[5].rx)
+                    .attr("ry", shapesData[5].ry)
+                    .attr("width", shapesData[5].rectwidth)
+                    .attr("height", shapesData[5].rectheight)
+                    .attr("stroke", "grey")
+                    .attr("fill", shapesData[5].color)
+                    .attr("stroke-width", "3")
+                    .attr("filter", "url(#glow)")
+                    //.call(_self.nodeDragHandler)
+                  _self.insertBgImage(d3.select(this), d.x, d.y, d);
+                  _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
+                  if(d.hasOwnProperty('isHidden') && d.isHidden) {
+                    d3.select(d3.select("#rec-"+d.id).node().parentNode).attr("class", "d-none")
+                  }
                 }
 
-              _self.insertBgImage(d3.select(this), d.x, d.y, d);
-              _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
-              break;
+                break;
 
-            case 'File':
-            case 'Index':
-              if(d3.select("#rec-"+d.id).empty()) {
-                d3.select(this)
-                  .append("rect")
-                  .attr("id", "rec-"+d.id)
-                  .attr("rx", shapesData[7].rx)
-                  .attr("ry", shapesData[7].ry)
-                  .attr("width", shapesData[7].rectwidth)
-                  .attr("height", shapesData[7].rectheight)
-                  .attr("stroke", "grey")
-                  .attr("filter", "url(#glow)")
-                  .attr("fill", function(d) {
-                    if(d.type == 'File')
-                     return shapesData[6].color;
-                    else if(d.type == 'Index')
-                      return shapesData[7].color;
-                  })
-                  .attr("stroke-width", "3")
-                  //.call(_self.nodeDragHandler)
-              }
-              _self.insertBgImage(d3.select(this), d.x, d.y, d);
-              _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
-              break;
-            case 'Sub-Process':
-              if(d3.select("#rec-"+d.id).empty()) {
-                d3.select(this)
-                  .append("rect")
-                  .attr("id", "rec-"+d.id)
-                  .attr("rx", shapesData[8].rx)
-                  .attr("ry", shapesData[8].ry)
-                  .attr("width", shapesData[8].rectwidth)
-                  .attr("height", shapesData[8].rectheight)
-                  .attr("stroke", "grey")
-                  .attr("fill", shapesData[8].color)
-                  .attr("stroke-width", "3")
-                  .attr("filter", "url(#glow)")
-                  //.call(_self.nodeDragHandler)
+              case 'File':
+              case 'Index':
+                //d3.select(this).append("rect").attr("id", "xxxxx"+d.id)
+                if(d3.select("#rec-"+d.id).empty()) {
+                  let el = d3.select(this)
+                    .append("rect")
+                    .attr("id", "rec-"+d.id)
+                    .attr("rx", shapesData[7].rx)
+                    .attr("ry", shapesData[7].ry)
+                    .attr("width", shapesData[7].rectwidth)
+                    .attr("height", shapesData[7].rectheight)
+                    .attr("stroke", "grey")
+                    .attr("filter", "url(#glow)")
+                    .attr("fill", function(d) {
+                      if(d.type == 'File')
+                       return shapesData[6].color;
+                      else if(d.type == 'Index')
+                        return shapesData[7].color;
+                    })
+                    .attr("stroke-width", "3")
+                    //.call(_self.nodeDragHandler)
+                    _self.insertBgImage(d3.select(this), d.x, d.y, d);
+                    _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
+                    if(d.hasOwnProperty('isHidden') && d.isHidden) {
+                      d3.select(d3.select("#rec-"+d.id).node().parentNode).attr("class", "d-none")
+                    }
                 }
 
-              _self.insertBgImage(d3.select(this), d.x, d.y, d);
-              _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
-              break;
-          }
+                break;
+              case 'Sub-Process':
+                if(d3.select("#rec-"+d.id).empty()) {
+                  d3.select(this)
+                    .append("rect")
+                    .text(function(d, i) {
+                      return "Helloooooo";
+                    })
+                    .attr("id", "rec-"+d.id)
+                    .attr("rx", shapesData[8].rx)
+                    .attr("ry", shapesData[8].ry)
+                    .attr("width", shapesData[8].rectwidth)
+                    .attr("height", shapesData[8].rectheight)
+                    .attr("stroke", "grey")
+                    .attr("fill", shapesData[8].color)
+                    .attr("stroke-width", "3")
+                    .attr("filter", "url(#glow)")
+                    //.call(_self.nodeDragHandler)
+                  }
+
+                _self.insertBgImage(d3.select(this), d.x, d.y, d);
+                _self.insertTitle(d3.select(this), d.title, d.x, d.y, d);
+                if(d.hasOwnProperty('isHidden') && d.isHidden) {
+                  d3.select(d3.select("#rec-"+d.id).node().parentNode).attr("class", "d-none")
+                }
+
+                break;
+            }
+
         });
-
         //_self.saveGraph()
   }
 
   toggleDeleteIcon = (node, d) => {
     if(!this.props.viewMode && hasEditPermission(this.props.user)) {
-      if(d3.select("#t"+d.id).classed("hide-delete-icon")) {
-        d3.select("#t"+d.id).classed("hide-delete-icon", false)
+      if(d3.select("#t"+d.id).classed("hide-graph-icon")) {
+        d3.select("#t"+d.id).classed("hide-graph-icon", false)
       } else {
-        d3.select("#t"+d.id).classed("hide-delete-icon", true)
+        d3.select("#t"+d.id).classed("hide-graph-icon", true)
+      }
+      if(d3.select("#hide"+d.id).classed("hide-graph-icon")) {
+        d3.select("#hide"+d.id).classed("hide-graph-icon", false)
+      } else {
+        d3.select("#hide"+d.id).classed("hide-graph-icon", true)
       }
     }
   }
@@ -1081,6 +1162,17 @@ class Graph extends Component {
     if(gEl) {
       gEl.remove();
     }
+  }
+
+  hideNode = (d, gEl) => {
+    console.log(d)
+    if(gEl) {
+      //gEl.remove();
+      gEl.attr("class", "d-none")
+    }
+    changeVisibility((d.fileId ? d.fileId : d.id), this.props.applicationId, this.props.selectedDataflow, true).then((response) => {
+      this.fetchSavedGraph();
+    });
   }
 
   showNodeDetails = (d) => {
@@ -1139,7 +1231,6 @@ class Graph extends Component {
 
     let xLoc = width / 2 - 25,
         yLoc = 100;
-    console.log(width);
     let svg = d3.select('#'+this.props.graphContainer).append("svg")
         .attr("width", width)
         .attr("height", "100%");
@@ -1340,11 +1431,47 @@ class Graph extends Component {
 
   }
 
+  showNode = (evt) => {
+    console.log(evt.key)
+    if(evt.key != 'all') {
+      let rec = d3.select('#rec-'+evt.key).node();
+      if(rec) {
+        let gEl = d3.select(d3.select('#rec-'+evt.key).node().parentNode);
+        gEl.classed("d-none", false);
+        changeVisibility(evt.key, this.props.applicationId, this.props.selectedDataflow, false).then((response) => {
+          this.fetchSavedGraph();
+        });
+      }
+    } else {
+      this.thisGraph.nodes.forEach((node) => {
+        if(node.isHidden) {
+          let gEl = d3.select(d3.select('#rec-'+node.id).node().parentNode);
+          gEl.classed("d-none", false);
+        }
+      })
+      changeVisibility('', this.props.applicationId, this.props.selectedDataflow, false).then((response) => {
+        this.fetchSavedGraph();
+      });
+    }
+  }
 
+  hiddenAssetsMenu = () => {
+    if(this.thisGraph.nodes) {
+      const menu = this.thisGraph.nodes.map((node, idx) => {
+         if(node.isHidden) {
+           return <Menu.Item key={node.id} icon={<EyeOutlined />} onClick={this.showNode}>{node.title}</Menu.Item>
+          }
+      })
+      menu.push(<Menu.ItemGroup><Menu.Item key={"all"} onClick={this.showNode}>Show All</Menu.Item></Menu.ItemGroup >);
+      return <Menu>{menu}</Menu>
+    } else {
+      return null
+    }
+  }
 
 
   render() {
-    const {nodeDetailStatus} = this.state;
+    const {nodeDetailStatus, nodes} = this.state;
     const pStyle = {
       fontSize: 16,
       color: 'rgba(0,0,0,0.85)',
@@ -1375,7 +1502,41 @@ class Graph extends Component {
          <div className="col-sm-1 float-left" style={{width:"85px"}}><nav id={this.props.sidebarContainer} className="navbar-light fixed-left graph-sidebar" style={{"backgroundColor": "#e3f2fd", "fontSize": "12px"}}></nav></div>
       : null }
 
-        <div id={this.props.graphContainer} className={(!editingAllowed || this.props.viewMode) ? " readonly graph-view-mode" : "graph-edit-mode"} tabIndex="-1"></div>
+        <div id={this.props.graphContainer} className={(!editingAllowed || this.props.viewMode) ? " readonly graph-view-mode" : "graph-edit-mode"} tabIndex="-1">
+          <Spin spinning={this.state.loading} className="graph-loading" size="large" />
+          <div className="graph-btns-container">
+            <span>
+              <Tooltip placement="topRight" title={"Refresh will validate the file/job relationship and update graph accordingly"}>
+                <Button style={{ float: 'right' }} className="refresh-btn"
+                  icon={
+                  <ReloadOutlined
+                    style={{
+                      fontSize: '28px',
+                      backgroundColor: '#f0f0f0',
+                    }}
+                  />
+                }/>
+              </Tooltip>
+            </span>
+            {nodes.filter(node => node.isHidden).length > 0 ?
+            <span>
+              <Tooltip placement="topRight" title={"Show hidden assets in the Workflow"}>
+              <Dropdown.Button className="dropdown-btn" overlay={this.hiddenAssetsMenu}
+                icon={
+                  <EyeInvisibleOutlined
+                    style={{
+                      fontSize: '28px',
+                      backgroundColor: '#f0f0f0',
+                    }}
+                  />
+                }
+              />
+
+
+              </Tooltip>
+            </span> : null}
+          </div>
+        </div>
 
       {this.state.openFileDetailsDialog ?
         <AssetDetailsDialog assetType="file" fileId={this.props.selectedFile} selectedAsset={this.props.selectedFile} application={this.props.application} user={this.props.user} handleClose={this.handleClose}/>
@@ -1454,7 +1615,7 @@ function mapStateToProps(state) {
   };
 }
 
-const connectedGraph = connect(mapStateToProps)(Graph);
+const connectedGraph = connect(mapStateToProps)((withRouter(Graph)));
 export { connectedGraph as Graph };
 
 //export default Graph;

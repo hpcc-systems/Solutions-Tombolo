@@ -43,10 +43,10 @@ body{
     margin: 0 0.5em;
 }
 
-.node .delete-icon{
+.node .graph-icon{
 }
 
-.node .hide-delete-icon{
+.node .hide-graph-icon{
     display: none;
 }
 

@@ -17,7 +17,8 @@ module.exports = (sequelize, DataTypes) => {
     gitRepo: DataTypes.STRING,
     jobType: DataTypes.STRING,
     title: DataTypes.STRING,
-    name: DataTypes.STRING
+    name: DataTypes.STRING,
+    cluster_id: DataTypes.STRING
   }, {freezeTableName: true});
   job.associate = function(models) {
     job.hasMany(models.jobfile,{

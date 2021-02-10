@@ -10,18 +10,17 @@ const Option = Select.Option;
 const { Paragraph } = Typography;
 
 function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefresh, selectedSubProcess, nodeId}) {
-  const [visible, setVisible] = useState(false);	
-  const [subProcess, setSubProcess] = useState({"id":'-', "title": 'Select a Dataflow'});	
+  const [visible, setVisible] = useState(false);
+  const [subProcess, setSubProcess] = useState({"id":'-', "title": 'Select a Dataflow'});
   const [dataFlows, setDataFlows] = useState([]);
   const [activeTab, setActiveTab] = useState();
   const [subProcessInput, setSubProcessInput] = useState([]);
   const [subProcessOutput, setSubProcessOutput] = useState([]);
-  
+
   const authReducer = useSelector(state => state.authenticationReducer);
   const editingAllowed = hasEditPermission(authReducer.user);
 
   useEffect(() => {
-  	console.log('selectedSubProcess: '+JSON.stringify(selectedSubProcess))
     setVisible(show);
     if(selectedSubProcess && selectedSubProcess.id != "") {
     	setSubProcess(selectedSubProcess);
@@ -30,16 +29,15 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
     } else {
     	setSubProcess(selectedSubProcess);
       setActiveTab(1)
-      console.log("tab 1")  
     }
 
     fetchSavedGraph();
-    
+
   }, [show, selectedSubProcess])
 
-  useEffect(() => {	  
+  useEffect(() => {
 	  if(applicationId) {
-	  	getData();  	  	
+	  	getData();
 	  }
 	}, []);
 
@@ -52,7 +50,7 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
     onRefresh(subProcess);
   }
 
-  const getData = async () => {  
+  const getData = async () => {
     fetch('/api/dataflow?application_id='+applicationId, {
       headers: authHeader()
     }).then(function(response) {
@@ -61,11 +59,11 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
       }
       handleError(response);
     }).then(function(data) {
-      setDataFlows(data); 
+      setDataFlows(data);
     }).catch(error => {
       console.log(error);
     });
-  };    
+  };
 
   const fetchSavedGraph = async () => {
     if(selectedParentDataflow && selectedParentDataflow.id != '' && selectedParentDataflow.id != undefined) {
@@ -102,11 +100,11 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
       }).catch(error => {
         console.log(error);
       });
-    } 
+    }
   }
 
 
-  const onChange = (value) => {	
+  const onChange = (value) => {
     if(value != '-') {
       let selectedDataflow = dataFlows.filter(dataflow => dataflow.id == value)[0];
     	setSubProcess({"id": selectedDataflow.id, "title": subProcess.title});
@@ -117,7 +115,7 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
   }
 
   const handleChange = (e) => {
-    setSubProcess({'id': subProcess.id, 'title': e.target.value});    
+    setSubProcess({'id': subProcess.id, 'title': e.target.value});
   }
 
   const formItemLayout = {
@@ -159,12 +157,12 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
       >
       <Tabs defaultActiveKey={activeTab}>
         <TabPane tab="Dataflow" key="1">
-        	{subProcess.id == "" || subProcess.id == undefined ? 
+        	{subProcess.id == "" || subProcess.id == undefined ?
             <span className="error">Please select a dataflow for this Sub-Process.</span>
-          : null}  
+          : null}
 
-          <Form.Item {...formItemLayout} label="Dataflow">               
-	        	<Select					    
+          <Form.Item {...formItemLayout} label="Dataflow">
+	        	<Select
 					    style={{ width: 300 }}
 					    onChange={onChange}
 					    value={(subProcess.id != '' && subProcess.id != undefined) ? subProcess.id : '-'}
@@ -173,24 +171,24 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
 					  	{dataFlows.map(dataflow => <Option key={dataflow.id}>{dataflow.title}</Option>)}
 	        	</Select>
         	</Form.Item>
-          <Form.Item {...formItemLayout} label="Title">    
+          <Form.Item {...formItemLayout} label="Title">
             <Input id="title" name="title" onChange={handleChange} defaultValue={subProcess.title} value={subProcess.title} placeholder="Title" disabled={!editingAllowed}/>
           </Form.Item>
 
         	<Tabs defaultActiveKey={"1"}>
         		<TabPane tab="Input" key="1">
-        			<Table				        
+        			<Table
 				        columns={assetCols}
 				        rowKey={record => record.id}
-				        dataSource={subProcessInput}        
+				        dataSource={subProcessInput}
 				        pagination={{ pageSize: 5 }} scroll={{ y: 380 }}
 				      />
         		</TabPane>
         		<TabPane tab="Output" key="2">
-        			<Table				        
+        			<Table
 				        columns={assetCols}
 				        rowKey={record => record.id}
-				        dataSource={subProcessOutput}        
+				        dataSource={subProcessOutput}
 				        pagination={{ pageSize: 5 }} scroll={{ y: 380 }}
 
 				      />
@@ -198,18 +196,18 @@ function SubProcessDialog({show, applicationId, selectedParentDataflow, onRefres
         	</Tabs>
         </TabPane>
         <TabPane tab="Designer" key="2"  disabled={subProcess.id == '' || subProcess.id == undefined}>
-	        <Graph 
-	          applicationId={applicationId} 
-	          viewMode={false} 
+	        <Graph
+	          applicationId={applicationId}
+	          viewMode={false}
 	          selectedParentDataflow={selectedParentDataflow}
-	          selectedDataflow={{'id':subProcess.id}} 
+	          selectedDataflow={{'id':subProcess.id}}
 	          graphContainer="subgraph" sidebarContainer="subgraphsidebar"
 	          dataflowType="sub-process"
 	          updateProcessId={subProcess.id}
 	        />
 	      </TabPane>
-			</Tabs>		        
-	  </Modal>   	  	
+			</Tabs>
+	  </Modal>
 	</React.Fragment>
   )
 }

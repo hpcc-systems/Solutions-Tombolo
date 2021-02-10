@@ -57,6 +57,83 @@ let updateDataFlowGraph = (applicationId, dataflowId, nodes, edges) => {
   });
 }
 
+let updateFileRelationship = (jobId, job, files) => {
+  let fieldsToUpdate={}, promises=[], nodes = [], edges = [];
+
+  return new Promise((resolve, reject) => {
+    /*nodes.push({
+      "title": job.basic.name,
+      "id": job.basic.currentlyEditingId,
+      "x": job.mousePosition[0],
+      "y": job.mousePosition[1],
+      "type": "Job",
+      "jobId": jobId
+    })*/
+    console.log(job.basic.clusterId);
+    console.log(files);
+    files.forEach((file, idx) => {
+      promises.push(
+        hpccUtil.fileInfo(file.name, job.basic.clusterId).then((fileInfo) => {
+          return File.create({
+            "application_id": job.basic.application_id,
+            "title": fileInfo.fileName,
+            "name": fileInfo.name,
+            "cluster_id": job.basic.clusterId,
+            "description": fileInfo.description,
+            "fileType": fileInfo.fileType,
+            "isSuperFile": fileInfo.isSuperFile,
+            "qualifiedPath": fileInfo.pathMask,
+            "dataflowId": job.basic.dataflowId,
+            "scope": fileInfo.scope
+          }).then((newFile) => {
+            let id=Math.floor(Date.now()), edge={};
+            console.log('jobFile: '+JSON.stringify(file));
+            let posX = file.file_type == 'input' ? job.mousePosition[0] - 75  : parseInt(job.mousePosition[0]) + 75;
+            let posY = file.file_type == 'input' ? job.mousePosition[1] - (45 * idx) : job.mousePosition[1] - (45 * idx);
+            nodes.push({
+              "title": fileInfo.fileName,
+              "id": newFile.id,
+              "x": posX,
+              "y": posY,
+              "type": "File",
+              "fileId": newFile.id
+            })
+            if(file.file_type == 'input') {
+              edge = {"source":newFile.id,"target":job.basic.id};
+            } else if(file.file_type == 'output') {
+              edge = {"source":job.basic.id,"target":newFile.id};
+            }
+            edges.push(edge);
+
+            fieldsToUpdate = {"file_id": newFile.id, "application_id" : job.basic.application_id};
+            let fileLayoutToSave = hpccUtil.updateCommonData(fileInfo.layout, fieldsToUpdate);
+            return FileLayout.bulkCreate(fileLayoutToSave, {updateOnDuplicate: ["name", "type", "displayType", "displaySize", "textJustification", "format","data_types", "isPCI", "isPII", "isHIPAA", "description", "required"]});
+           }).then((fileLayout) => {
+            let fileValidationsToSave = hpccUtil.updateCommonData(fileInfo.validations, fieldsToUpdate);
+            return FileValidation.bulkCreate(
+              fileValidationsToSave,
+              {updateOnDuplicate: ["name", "ruleType", "rule", "action", "fixScript"]}
+            )
+         }).then((fileValidations) => {
+            console.log('file '+fileInfo.fileName+' processed...' )
+         }).catch(err => {
+          console.log('error occured: '+err)
+          reject(err);
+         })
+
+        })
+      );
+    })
+    console.log('resolving....');
+    Promise.all(promises).then(() => {
+      console.log("job and files created....")
+      updateDataFlowGraph(job.basic.application_id, job.basic.dataflowId, nodes, edges).then((dataflowGraph) => {
+        resolve(dataflowGraph)
+      });
+    });
+  })
+}
+
 let updateJobDetails = (jobId, applicationId, req) => {
   let fieldsToUpdate = {"job_id"  : jobId, "application_id" : applicationId};
 
@@ -65,98 +142,61 @@ let updateJobDetails = (jobId, applicationId, req) => {
 
     var jobFileToSave = updateCommonData(req.body.job.files, fieldsToUpdate);
     JobFile.bulkCreate(
-        jobFileToSave, {updateOnDuplicate: ["file_type", "name", "description", "gitRepo"]}
+      jobFileToSave, {updateOnDuplicate: ["file_type", "name", "description", "gitRepo"]}
     ).then(function(jobFile) {
       var jobParamsToSave = updateCommonData(req.body.job.params, fieldsToUpdate);
       JobParam.destroy({where:{application_id:applicationId, job_id: jobId}}).then((deleted) => {
       return JobParam.bulkCreate(jobParamsToSave)
     }).then(function(jobParam) {
       if(req.body.job.autoCreateFiles) {
-        let fieldsToUpdate={}, promises=[];
-        return new Promise((resolve, reject) => {
-          nodes.push({
-            "title": req.body.job.basic.name,
-            "id": req.body.job.currentlyEditingId,
-            "x": req.body.job.mousePosition[0],
-            "y": req.body.job.mousePosition[1],
-            "type": "Job",
-            "jobId": jobId
-          })
-          req.body.files.forEach((file, idx) => {
-            promises.push(
-              hpccUtil.fileInfo(file.name, req.body.job.basic.clusterId).then((fileInfo) => {
-                return File.create({
-                  "application_id": req.body.job.basic.application_id,
-                  "title": fileInfo.fileName,
-                  "name": fileInfo.name,
-                  "cluster_id": req.body.job.basic.clusterId,
-                  "description": fileInfo.description,
-                  "fileType": fileInfo.fileType,
-                  "isSuperFile": fileInfo.isSuperFile,
-                  "qualifiedPath": fileInfo.pathMask,
-                  "dataflowId": req.body.basic.dataflowId,
-                  "scope": fileInfo.scope
-                }).then((newFile) => {
-                  let id=Math.floor(Date.now()), edge={};
-                  console.log('jobFile: '+JSON.stringify(file));
-                  let posX = file.file_type == 'input' ? req.body.job.mousePosition[0] - 75  : req.body.job.mousePosition[0] + 75;
-                  let posY = file.file_type == 'input' ? req.body.job.mousePosition[1] - (45 * idx) : req.body.job.mousePosition[1] - (45 * idx);
-                  nodes.push({
-                    "title": fileInfo.fileName,
-                    "id": id,
-                    "x": posX,
-                    "y": posY,
-                    "type": "File",
-                    "fileId": newFile.id
-                  })
-
-                  if(file.file_type == 'input') {
-                    edge = {"source":id,"target":req.body.job.currentlyEditingId};
-                  } else if(file.file_type == 'output') {
-                    edge = {"source":req.body.job.currentlyEditingId,"target":id};
-                  }
-                  edges.push(edge);
-
-                  fieldsToUpdate = {"file_id": newFile.id, "application_id" : applicationId};
-                    let fileLayoutToSave = hpccUtil.updateCommonData(fileInfo.layout, fieldsToUpdate);
-                  return FileLayout.bulkCreate(fileLayoutToSave, {updateOnDuplicate: ["name", "type", "displayType", "displaySize", "textJustification", "format","data_types", "isPCI", "isPII", "isHIPAA", "description", "required"]});
-                 }).then((fileLayout) => {
-                  let fileValidationsToSave = hpccUtil.updateCommonData(fileInfo.validations, fieldsToUpdate);
-                  return FileValidation.bulkCreate(
-                    fileValidationsToSave,
-                    {updateOnDuplicate: ["name", "ruleType", "rule", "action", "fixScript"]}
-                  )
-               }).then((fileValidations) => {
-                  console.log('file '+fileInfo.fileName+' processed...' )
-               }).catch(err => {
-                console.log('error occured: '+err)
-                reject(err);
-               })
-
-              })
-            );
-          })
-          console.log('resolving....');
-          Promise.all(promises).then(() => {
-              console.log("job and files created....")
-
-            updateDataFlowGraph(req.body.job.basic.application_id, req.body.job.basic.dataflowId, nodes, edges).then((dataflowGraph) => {
-              resolve(dataflowGraph)
-            });
-          });
-          }).then((results) => {
-            console.log('results: '+JSON.stringify(results));
-            resolve({"result":"success", "title":req.body.job.basic.title, "jobId":jobId, "dataflow":results})
-          });
-        } else {
-          resolve({"result":"success", "title":req.body.job.basic.title, "jobId":jobId})
-        }
-      }).catch((err) => {
+        updateFileRelationship(jobId, req.body.job, req.body.files).then((results) => {
+          console.log('results: '+JSON.stringify(results));
+          resolve({"result":"success", "title":req.body.job.basic.title, "jobId":jobId, "dataflow":results})
+        });
+      } else {
+        resolve({"result":"success", "title":req.body.job.basic.title, "jobId":jobId})
+      }
+    }).catch((err) => {
         reject(err)
-      })
+    })
     });
   })
 }
+
+router.post('/createFileRelation', [
+  body('jobId').optional({checkFalsy:true}).isUUID(4).withMessage('Invalid job id'),
+  body('clusterId').optional({checkFalsy:true}).isUUID(4).withMessage('Invalid cluster id'),
+  body('dataflowId').optional({checkFalsy:true}).isUUID(4).withMessage('Invalid dataflowId'),
+  body('currentlyEditingId').optional({checkFalsy:true}).isInt().withMessage('Invalid currentlyEditingId'),
+  body('mousePosition').optional({checkFalsy:true}).isString().withMessage('Invalid mousePostion')
+], (req, res) => {
+  const errors = validationResult(req).formatWith(validatorUtil.errorFormatter);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ success: false, errors: errors.array() });
+  }
+
+  Job.findOne({where: {id: req.body.jobId}, include:[JobFile]}).then((savedJob) => {
+    let mousePos = req.body.mousePosition.split(',');
+    let job = {};
+    job.basic = {
+      "title": savedJob.name,
+      "id": req.body.currentlyEditingId,
+      "x": parseInt(mousePos[0]),
+      "y": parseInt(mousePos[1]),
+      "clusterId": savedJob.cluster_id,
+      "application_id": req.body.application_id,
+      "dataflowId": req.body.dataflowId
+    }
+    job.mousePosition = mousePos;
+    console.log(job);
+    updateFileRelationship(req.body.jobId, job, savedJob.jobfiles).then((results) => {
+      console.log("createFileRelation - success for "+req.body.jobId);
+      res.json(results);
+    })
+  }).catch((err) => {
+    return res.status(500).send("Error occured while file relation");
+  })
+});
 
 router.post('/saveJob', [
   body('id')

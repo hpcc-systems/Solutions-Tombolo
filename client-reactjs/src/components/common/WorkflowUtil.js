@@ -139,3 +139,21 @@ export function updateGraph(assetId, applicationId, selectedDataflow) {
 	  });
 	});
 }
+
+export function changeVisibility(assetId, applicationId, selectedDataflow, hide) {
+  return new Promise((resolve) => {
+    var data = JSON.stringify({id: assetId, application_id: applicationId, dataflowId: selectedDataflow.id, hide: hide});
+    fetch("/api/dataflowgraph/changeNodeVisibility", {
+      method: 'post',
+      headers: authHeader(),
+      body: data
+    }).then((response) => {
+      if(response.ok) {
+        resolve(response.json());
+      }
+    }).catch(error => {
+      console.log(error);
+      message.error("There was an error updating the graph");
+    });
+  });
+}

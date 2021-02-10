@@ -352,7 +352,6 @@ class IndexDetails extends Component {
       "title" : this.state.index.title,
       "name" : this.state.index.name,
       "description" : this.state.index.description,
-      "groupId": this.props.groupId ? this.props.groupId : this.state.index.groupId,
       "primaryService" : this.state.index.primaryService,
       "backupService" : this.state.index.backupService,
       "qualifiedPath" : this.state.index.path,
@@ -360,6 +359,11 @@ class IndexDetails extends Component {
       "dataflowId" : this.props.selectedDataflow ? this.props.selectedDataflow.id : '',
       "parentFileId" : this.state.selectedSourceFile,
     };
+    let groupId = this.props.groupId ? this.props.groupId : this.state.index.groupId;
+    if(groupId) {
+      index_basic.groupId = groupId;
+    }
+
     indexDetails.basic = index_basic;
 
     indexDetails.indexKey = this.state.index.keyedColumns;

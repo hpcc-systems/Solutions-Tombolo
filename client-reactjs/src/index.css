@@ -647,3 +647,34 @@ div.tooltip {
 .ant-tree-list {
   padding-top: 5px;
 }
+
+.graph-loading {
+  padding-left: 35%;
+  padding-top: 330px;
+  position: absolute;
+}
+
+.graph-btns-container {
+  float: right;
+}
+
+.graph-btns-container button {
+  margin: 5px;
+}
+
+.dropdown-btn > .ant-dropdown-trigger  {
+  border: none;
+}
+
+.dropdown-btn > .ant-dropdown-trigger > span {
+  background-color: white !important;
+}
+
+.refresh-btn {
+ border: none;
+ vertical-align: top;
+}
+
+.refresh-btn > span {
+ background-color: white !important;
+}

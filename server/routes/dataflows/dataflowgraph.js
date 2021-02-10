@@ -160,6 +160,51 @@ router.post('/deleteAsset', [
     })
 });
 
+router.post('/changeNodeVisibility', [
+  body('id').optional({checkFalsy:true})
+    .isUUID(4).withMessage('Invalid asset id'),
+  body('dataflowId')
+    .isUUID(4).withMessage('Invalid dataflow id'),
+  body('application_id')
+    .isUUID(4).withMessage('Invalid application id'),
+  body('hide')
+    .isBoolean().withMessage('Invalid visibility value'),
+
+],(req, res) => {
+    const errors = validationResult(req).formatWith(validatorUtil.errorFormatter);
+    if (!errors.isEmpty()) {
+      return res.status(422).json({ success: false, errors: errors.array() });
+    }
+    let assetId=req.body.id, edgeId='';
+    console.log('assetId: '+assetId+' dataflowId: '+req.body.dataflowId);
+    DataflowGraph.findOne({where:{"application_Id":req.body.application_id, dataflowId:req.body.dataflowId}}).then(function(graph) {
+      let nodes = JSON.parse(graph.nodes), edges = JSON.parse(graph.edges), DataflowGraphId=graph.id;
+      nodes.forEach((node, idx) => {
+        if(!assetId) {
+          node.isHidden = false;
+        } else if (node.id == assetId || (node.fileId == assetId || node.indexId == assetId || node.queryId == assetId || node.jobId == assetId || node.subProcessId == assetId)) {
+          edgeId=node.id;
+          if(req.body.hide) {
+            node.isHidden = true
+          } else {
+            node.isHidden = false
+          }
+        }
+      });
+      edges = edges.filter(edge => (edge.source != edgeId && edge.target != edgeId));
+      DataflowGraph.update(
+        {nodes:JSON.stringify(nodes), edges:JSON.stringify(edges)},
+        {where:{"id": DataflowGraphId, "application_id":req.body.application_id}}
+      ).then(async function(updated) {
+        res.json({"result":"success"});
+      }).catch(function(err) {
+          console.log(err);
+      });
+    })
+
+});
+
+
 router.get('/nodedetails', [
   query('application_id')
     .optional({checkFalsy:true})

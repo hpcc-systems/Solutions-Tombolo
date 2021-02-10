@@ -708,7 +708,6 @@ class FileDetails extends Component {
       "name" : (!this.state.file.name || this.state.file.name == '') ? this.state.file.title : this.state.file.name,
       "cluster_id": this.state.file.clusterId,
       "description" : this.state.file.description,
-      "groupId" : this.props.groupId ? this.props.groupId : this.state.file.groupId,
       "scope": this.state.file.scope,
       "serviceUrl" : this.state.file.serviceUrl,
       "qualifiedPath" : this.state.file.qualifiedPath,
@@ -720,6 +719,10 @@ class FileDetails extends Component {
       "application_id" : applicationId,
       "dataflowId" : this.props.selectedDataflow ? this.props.selectedDataflow.id : '',
     };
+    let groupId = this.props.groupId ? this.props.groupId : this.state.file.groupId;
+    if(groupId) {
+      file_basic.groupId = groupId;
+    }
     fileDetails.basic = file_basic;
     fileDetails.fields = this.state.file.layout;
     var selectedLicenses={};

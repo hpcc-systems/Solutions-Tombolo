@@ -358,7 +358,6 @@ class QueryDetails extends Component {
         "title" : this.state.query.title,
         "name" : this.state.query.name,
         "description" : this.state.query.description,
-        "groupId" : this.props.groupId ? this.props.groupId : this.state.query.groupId,
         "url" : this.state.query.url,
         "gitRepo" : this.state.query.gitRepo,
         "primaryService" : this.state.query.primaryService,
@@ -367,6 +366,10 @@ class QueryDetails extends Component {
       },
       fields: inputFields.concat(outputFields)
     };
+    let groupId = this.props.groupId ? this.props.groupId : this.state.query.groupId;
+    if(groupId) {
+      queryDetails.basic.groupId = groupId;
+    }
 
     //console.log(queryDetails);
 

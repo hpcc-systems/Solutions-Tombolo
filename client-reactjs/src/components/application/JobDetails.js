@@ -418,14 +418,13 @@ class JobDetails extends Component {
         "name" : this.state.job.name,
         "title" : this.state.job.title,
         "description" : this.state.job.description,
-        "groupId": this.props.groupId ? this.props.groupId : this.state.job.groupId,
         "ecl" : this.state.job.ecl,
         "gitRepo" : this.state.job.gitRepo,
         "entryBWR" : this.state.job.entryBWR,
         "jobType" : this.state.job.jobType,
         "contact": this.state.job.contact,
         "author": this.state.job.author,
-        "clusterId": this.state.selectedCluster,
+        "cluster_id": this.state.selectedCluster,
       },
       "params": this.state.job.inputParams,
       "files" : inputFiles.concat(outputFiles),
@@ -433,6 +432,10 @@ class JobDetails extends Component {
       "currentlyEditingId": this.props.currentlyEditingId,
       "autoCreateFiles": this.state.autoCreateFiles
     };
+    let groupId = this.props.groupId ? this.props.groupId : this.state.job.groupId;
+    if(groupId) {
+      jobDetails.basic.groupId = groupId;
+    }
 
     console.log(jobDetails);
 
