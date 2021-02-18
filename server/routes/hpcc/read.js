@@ -99,7 +99,6 @@ router.post('/jobsearch', [
   if (!errors.isEmpty()) {
     return res.status(422).json({ success: false, errors: errors.array() });
   }
-  console.log('clusterid: '+req.body.clusterid);
 	hpccUtil.getCluster(req.body.clusterid).then(function(cluster) {
 		let url = cluster.thor_host + ':' + cluster.thor_port +'/WsWorkunits/WUQuery.json?Jobname=*'+req.body.keyword+'*';
         request.get({
@@ -126,7 +125,7 @@ router.post('/jobsearch', [
 				});
 	      	 	res.json(jobSearchAutoComplete);
 	      	} else {
-	      		res.json("");
+	      		res.json([]);
 	      	}
 	      }
       	});
