@@ -62,6 +62,12 @@ module.exports = (sequelize, DataTypes) => {
       hooks: true
     });
     file.belongsTo(models.groups);
+    file.belongsToMany(models.job, {
+      through: 'jobfile',
+      as: 'jobfiles',
+      foreignKey: 'job_id',
+      otherKey: 'file_id'
+    });
   };
   return file;
 };

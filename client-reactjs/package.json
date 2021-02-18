@@ -19,6 +19,7 @@
     "jquery": "^3.5.1",
     "jwt-decode": "^2.2.0",
     "papaparse": "^5.2.0",
+    "path-to-regexp": "^1.7.0",
     "plotly.js": "^1.58.4",
     "plotly.js-basic-dist": "^1.58.4",
     "react": "^16.14.0",

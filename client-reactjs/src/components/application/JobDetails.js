@@ -424,7 +424,7 @@ class JobDetails extends Component {
         "jobType" : this.state.job.jobType,
         "contact": this.state.job.contact,
         "author": this.state.job.author,
-        "cluster_id": this.state.selectedCluster,
+        "cluster_id": this.state.selectedCluster
       },
       "params": this.state.job.inputParams,
       "files" : inputFiles.concat(outputFiles),

@@ -54,6 +54,114 @@ exports.fileInfo = (fileName, clusterId) => {
 	})
 }
 
+exports.getJobInfo = (clusterId, jobWuid, jobType) => {
+  let sourceFiles=[], outputFiles=[], jobInfo = {};
+  return new Promise((resolve, reject) => {
+    module.exports.getCluster(clusterId).then(function(cluster) {
+      request.get({
+        url: cluster.thor_host + ':' + cluster.thor_port +'/WsWorkunits/WUInfo.json?Wuid='+jobWuid,
+        auth : module.exports.getClusterAuth(cluster)
+      }, function(err, response, body) {
+        if (err) {
+          console.log('ERROR - ', err);
+          reject(err);
+        } else {
+          var result = JSON.parse(body);
+          if(result.Exceptions) {
+            reject(result.Exceptions.Exception);
+          }
+          if(jobType == 'Query Build') {
+            let clusterAuth = module.exports.getClusterAuth(cluster);
+            let wuService = new hpccJSComms.WorkunitsService({ baseUrl: cluster.thor_host + ':' + cluster.thor_port, userID:(clusterAuth ? clusterAuth.user : ""), password:(clusterAuth ? clusterAuth.password : "")});
+            wuService.WUListQueries({"WUID":jobWuid}).then(response => {
+              if(response.QuerysetQueries && response.QuerysetQueries.QuerySetQuery && response.QuerysetQueries.QuerySetQuery.length > 0) {
+                wuService.WUQueryDetails({"QueryId":response.QuerysetQueries.QuerySetQuery[0].Id, "QuerySet":"roxie"}).then(queryDetails => {
+                  queryDetails.LogicalFiles.Item.forEach((logicalFile)  => {
+                    sourceFiles.push({"name":logicalFile})
+                  })
+                  jobInfo = {
+                    "sourceFiles": sourceFiles,
+                    "outputFiles": [],
+                    "Jobname": result.WUInfoResponse.Workunit.Jobname,
+                    "description": result.WUInfoResponse.Workunit.Description,
+                    "ecl": result.WUInfoResponse.Workunit.Query.Text,
+                    "entryBWR": result.WUInfoResponse.Workunit.Jobname,
+                    "wuid": result.WUInfoResponse.Workunit.Wuid
+                  }
+                  resolve(jobInfo);
+                })
+              } else {
+                resolve(jobInfo)
+              }
+            });
+          } else {
+            if(result.WUInfoResponse && result.WUInfoResponse.Workunit) {
+              var wuInfoResponse = result.WUInfoResponse.Workunit, fileInfo = {};
+              if(wuInfoResponse.SourceFiles && wuInfoResponse.SourceFiles.ECLSourceFile) {
+                wuInfoResponse.SourceFiles.ECLSourceFile.forEach((sourceFile) => {
+                  sourceFiles.push({"name":sourceFile.Name});
+                });
+
+              }
+              if(wuInfoResponse.Results && wuInfoResponse.Results.ECLResult) {
+                let files = wuInfoResponse.Results.ECLResult.filter((result) => {
+                  return result.FileName != ""
+                })
+                files.forEach((file) => {
+                  outputFiles.push({"name":file.FileName});
+                })
+              }
+
+              jobInfo = {
+                "sourceFiles": sourceFiles,
+                "outputFiles": outputFiles,
+                "Jobname": result.WUInfoResponse.Workunit.Jobname,
+                "description": result.WUInfoResponse.Workunit.Description,
+                "ecl": result.WUInfoResponse.Workunit.Query.Text,
+                "entryBWR": result.WUInfoResponse.Workunit.Jobname,
+                "wuid": result.WUInfoResponse.Workunit.Wuid
+              };
+              resolve(jobInfo);
+            }
+
+          }
+        }
+      });
+    });
+  });
+}
+
+exports.getJobWuidByName = (clusterId, jobName) => {
+  return new Promise((resolve, reject) => {
+    module.exports.getCluster(clusterId).then(function(cluster) {
+      request.get({
+        url: cluster.thor_host + ':' + cluster.thor_port +'/WsWorkunits/WUQuery.json?Jobname='+jobName,
+        auth : module.exports.getClusterAuth(cluster)
+      }, function(err, response, body) {
+        if (err) {
+          console.log('ERROR - ', err);
+          reject(err);
+        } else {
+          var result = JSON.parse(body);
+          if(result.Exceptions) {
+            reject(err);
+          }
+          if(result.WUQueryResponse
+            && result.WUQueryResponse.Workunits
+            && result.WUQueryResponse.Workunits.ECLWorkunit
+            && result.WUQueryResponse.Workunits.ECLWorkunit.length > 0) {
+            //return the first wuid assuming that is the latest one
+            resolve(result.WUQueryResponse.Workunits.ECLWorkunit[0].Wuid);
+          } else {
+            resolve(null);
+          }
+        }
+      });
+    });
+  });
+
+}
+
 let getFileLayout = (cluster, fileName, format) =>  {
 	var layoutResults = [];
 	if(format == 'csv') {

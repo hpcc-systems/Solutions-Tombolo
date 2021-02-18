@@ -198,7 +198,6 @@ class Graph extends Component {
         }
         break;
       case 'Sub-Process':
-      console.log('currentlyEditingId: '+this.state.currentlyEditingId);
         this.setState({
           selectedSubProcess: {"id": d.subProcessId, "title":d.title},
           showSubProcessDetails: true
@@ -210,7 +209,6 @@ class Graph extends Component {
   openNewAssetDialog(d) {
     let _self=this;
     let isNew = false;
-    console.log(JSON.stringify(_self.state.currentlyEditingNode));
     switch(d.type) {
       case 'File':
         isNew = true;
@@ -377,9 +375,9 @@ class Graph extends Component {
   onFileAdded = (saveResponse) => {
     if(saveResponse) {
       var newData = this.thisGraph.nodes.map(el => {
-        console.log('currentlyEditingId: '+this.state.currentlyEditingId)
         if(el.id == this.state.currentlyEditingId) {
           el.title=saveResponse.title;
+          d3.select("#label-"+el.id).text(saveResponse.title);
           switch(el.type) {
             case 'File':
               el.fileId=saveResponse.fileId;
@@ -486,7 +484,6 @@ class Graph extends Component {
   }
 
   saveGraph() {
-    console.log('save: '+JSON.stringify(this.props.selectedDataflow))
     let _self = this, edges = [], nodes = this.thisGraph.nodes;
     this.thisGraph.edges.forEach(function (val, i) {
       if(val.source && val.target) {
@@ -803,8 +800,6 @@ class Graph extends Component {
 
     let mouseDownNode = _self.graphState.mouseDownNode;
     let mouseEnterNode = _self.graphState.mouseEnterNode;
-    console.log(mouseDownNode);
-    console.log(mouseEnterNode);
 
     if (_self.graphState.justDragged) {
       // dragged, not clicked
@@ -1165,7 +1160,6 @@ class Graph extends Component {
   }
 
   hideNode = (d, gEl) => {
-    console.log(d)
     if(gEl) {
       //gEl.remove();
       gEl.attr("class", "d-none")
@@ -1432,7 +1426,6 @@ class Graph extends Component {
   }
 
   showNode = (evt) => {
-    console.log(evt.key)
     if(evt.key != 'all') {
       let rec = d3.select('#rec-'+evt.key).node();
       if(rec) {
@@ -1467,6 +1460,33 @@ class Graph extends Component {
     } else {
       return null
     }
+  }
+
+  refreshGraph = () => {
+    let _self=this;
+    _self.setState({
+      loading: true
+    });
+    fetch('/api/job/refreshDataflow', {
+      method: 'post',
+      headers: authHeader(),
+      body: JSON.stringify({
+        application_id: this.props.applicationId,
+        dataflowId: this.props.selectedDataflow.id
+      })
+    }).then(function(response) {
+      if(response.ok) {
+        return response.json();
+      }
+      handleError(response);
+    }).then(function(data) {
+      console.log('Refreshed graph..');
+      _self.fetchSavedGraph();
+      _self.setState({
+        loading: false
+      });
+
+    });
   }
 
 
@@ -1508,6 +1528,7 @@ class Graph extends Component {
             <span>
               <Tooltip placement="topRight" title={"Refresh will validate the file/job relationship and update graph accordingly"}>
                 <Button style={{ float: 'right' }} className="refresh-btn"
+                  onClick={this.refreshGraph}
                   icon={
                   <ReloadOutlined
                     style={{
@@ -1531,8 +1552,6 @@ class Graph extends Component {
                   />
                 }
               />
-
-
               </Tooltip>
             </span> : null}
           </div>
