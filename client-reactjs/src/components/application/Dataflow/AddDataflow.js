@@ -3,10 +3,12 @@ import ReactDOM from 'react-dom';
 import { Button, Form, Input, message, Popconfirm, Icon, Tooltip, Modal, Select } from 'antd/lib';
 import { authHeader, handleError } from "../../common/AuthHeader.js";
 import { MarkdownEditor } from "../../common/MarkdownEditor.js";
+import { useSelector } from "react-redux";
 const Option = Select.Option;
 
 function AddDataflow({isShowing, toggle, applicationId, onDataFlowUpdated, selectedDataflow}) {
-	const [dataFlow, setDataFlow] = useState({
+  const assetReducer = useSelector(state => state.assetReducer);
+  const [dataFlow, setDataFlow] = useState({
 		id: '',
 		title: '',
 		description: '',
@@ -29,6 +31,9 @@ function AddDataflow({isShowing, toggle, applicationId, onDataFlowUpdated, selec
 
   useEffect(() => {
     getClusters();
+    if(assetReducer && assetReducer.clusterId != '') {
+      setClusterSelected(assetReducer.clusterId);
+    }
   }, [selectedDataflow])
 
   const formItemLayout = {
