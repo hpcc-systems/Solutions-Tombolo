@@ -22,8 +22,12 @@ async function authenticate(req, res, { username, password }) {
             "clientId": process.env.AUTHSERVICE_TOMBOLO_CLIENT_ID
           }
         }, function(err, response, body) {
-          console.log(body);
           if (!response || response.statusCode != 200) {
+            if(!response) {
+              console.log("Cannot reach AuthService. Please check if AuthService is running and is accessible from Tombolo...")
+            } else {
+              console.log("Login failed!");
+            }            
             reject(new Error(err));
           } else {
             resolve(body);

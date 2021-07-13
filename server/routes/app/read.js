@@ -1,9 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const assert = require('assert');[]
+var path = require('path');
+var fs = require('fs');
 var models  = require('../../models');
 let UserApplication = models.user_application;
 let Application = models.application;
+let File = models.file;
+let FileLayout = models.file_layout;
+let FileLicense = models.file_license;
+let FileValidation = models.file_validation;
+let Index = models.indexes;
+let IndexKey = models.index_key;
+let IndexPayload = models.index_payload;
+let Job = models.job;
+let JobFile = models.jobfile;
+let JobParam = models.jobparam;
+let Query = models.query;
+let QueryField = models.query_field;
+let Dataflow = models.dataflow;
+let DataflowGraph = models.dataflowgraph;
+
 const validatorUtil = require('../../utils/validator');
 const { body, query, validationResult } = require('express-validator');
 const NotificationModule = require('../notifications/email-notification');
@@ -142,4 +159,90 @@ router.post('/saveUserApp', function (req, res) {
     return res.status(500).json({ success: false, message: "Error occured while saving user application mapping" });
   }
 });
+
+router.post('/export', [
+  body('id').isUUID(4).withMessage('Invalid application id')
+], (req, res) => {
+  const errors = validationResult(req).formatWith(validatorUtil.errorFormatter);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ success: false, errors: errors.array() });
+  } 
+
+  try {
+    let applicationExport = {};
+    Application.findOne({
+      where: {id: req.body.id},
+    }).then(async (application) => {
+      applicationExport.title = application.title,
+      applicationExport.description = application.description;
+      applicationExport.cluster = application.cluster;
+
+      let files = await File.findAll({where: {application_id: application.id}, 
+        include: [
+          {model: FileLayout, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}, 
+          {model: FileLicense, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}, 
+          {model: FileValidation, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}
+        ],
+        attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }
+      }); 
+
+      let indexes = await Index.findAll({where: {application_id: application.id}, 
+        include: [
+          {model: IndexKey, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}, 
+          {model: IndexPayload, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}
+        ],
+        attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }
+      }); 
+
+      let queries = await Query.findAll({where: {application_id: application.id}, 
+        include: [{model: QueryField, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}],
+        attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }
+      }); 
+
+      let jobs = await Job.findAll({where: {application_id: application.id}, 
+        include: [
+          {model: JobFile, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}, 
+          {model: JobParam, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}
+        ],
+        attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id', 'assetId'] }
+      }); 
+
+      let dataflow = await Dataflow.findAll({where: {application_id: application.id}, 
+        include: [{model: DataflowGraph, attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }}],
+        attributes: { exclude: ['createdAt', 'updatedAt', 'id', 'application_id'] }
+      }); 
+
+      applicationExport.assets = {files: files, indexes: indexes, queries: queries, jobs: jobs, dataflow: dataflow};
+        
+      var schemaDir = path.join(__dirname, '..', '..', 'schemas');
+      if (!fs.existsSync(schemaDir)){
+        fs.mkdirSync(schemaDir);
+      }
+      var exportFile = path.join(__dirname, '..', '..', 'schemas', application.title+'-export.json');
+      
+      fs.appendFile(exportFile, JSON.stringify(applicationExport, null, 4), function (err) {
+          if (err) return res.status(500).send("Error occured while exporting application");
+          res.download(exportFile, function(err){
+            if (err) {
+              console.log(err);
+              console.log("Error occured during download...")
+              res.status(500).send("Error occured while exporting application");;
+            } else {
+              console.log("Download completed...")
+              fs.unlink(exportFile, (err) => {
+                if (err) res.status(500).send("Error occured while exporting application");;
+                console.log(exportFile + ' was deleted after download');
+              });
+            }
+          });
+      });
+
+      //res.json(applicationExport);
+    })
+  } catch (err) {
+    console.log('err', err);
+    return res.status(500).json({ success: false, message: "Error occured while removing application" });
+  }
+});
+
 module.exports = router;

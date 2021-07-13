@@ -9,7 +9,8 @@ import { MarkdownEditor } from "../common/MarkdownEditor.js";
 import ShareApp from "./ShareApp";
 import ReactMarkdown from 'react-markdown';
 import { applicationActions } from '../../redux/actions/Application';
-import { DeleteOutlined, EditOutlined, QuestionCircleOutlined, ShareAltOutlined  } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, QuestionCircleOutlined, ShareAltOutlined, ExportOutlined  } from '@ant-design/icons';
+import download from "downloadjs"
 
 class Applications extends Component {
   constructor(props) {
@@ -232,6 +233,23 @@ class Applications extends Component {
     }
   }
 
+  handleExportApplication = (id, title) => {
+    fetch("/api/app/read/export", {
+      method: 'post',
+      headers: authHeader(),
+      body: JSON.stringify({id: id})
+    }).then((response) => {
+      if(response.ok) {
+        return response.blob();
+      }
+      handleError(response);
+    }).then(blob => {
+      download(blob, title+'-schema.json');
+    }).catch(error => {
+      console.log(error);
+    });
+  }
+
   handleClose = () => {
     this.setState({
       openShareAppDialog: false
@@ -274,6 +292,8 @@ class Applications extends Component {
             <React.Fragment>
               <Divider type="vertical" />
               <a href="#" onClick={(row) => this.handleEditApplication(record.id)}><Tooltip placement="right" title={"Edit Application"}><EditOutlined /></Tooltip></a>
+              <Divider type="vertical" />
+              <a href="#" onClick={(row) => this.handleExportApplication(record.id, record.title)}><Tooltip placement="right" title={"Export Application"}><ExportOutlined /></Tooltip></a>
               <Divider type="vertical" />
               <Popconfirm title="Are you sure you want to delete this Application?" onConfirm={() => this.handleRemove(record.id)} icon={<QuestionCircleOutlined />}>
                 <a href="#"><Tooltip placement="right" title={"Delete Application"}><DeleteOutlined /></Tooltip></a>

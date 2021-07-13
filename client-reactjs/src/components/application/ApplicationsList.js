@@ -8,6 +8,7 @@ import { authHeader, handleError } from "../common/AuthHeader.js"
 import { connect } from 'react-redux';
 import { applicationActions } from '../../redux/actions/Application';
 import { DownOutlined  } from '@ant-design/icons';
+import download from "downloadjs";
 const Option = Select.Option;
 
 class ApplicationsList extends Component {
@@ -48,6 +49,23 @@ class ApplicationsList extends Component {
     this.setState({ selected: event.item.props.children });
     this.props.history.push('/'+event.key+'/dataflow')
   }
+
+  handleSchemaDownload = (e) => {
+    var applicationId = application.id;
+    fetch("/api/app/read/export?app_id="+applicationId+"&type="+e.key, {
+      headers: authHeader()
+    }).then((response) => {
+      if(response.ok) {
+        return response.blob();
+      }
+      handleError(response);
+    }).then(blob => {
+      download(blob, this.props.application.applicationTitle+'-schema.'+e.key);
+    }).catch(error => {
+      console.log(error);
+    });
+  }
+
 
   render() {
     const { selected } = this.state;
